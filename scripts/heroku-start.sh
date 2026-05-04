@@ -8,6 +8,14 @@ export DATA_DIR="/app/.omniroute"
 mkdir -p "$DATA_DIR"
 
 DB_PATH="$DATA_DIR/storage.sqlite"
+LITESTREAM_BIN="./bin/litestream"
+
+# Check if Litestream binary exists
+if [ ! -f "$LITESTREAM_BIN" ]; then
+  echo "ERROR: Litestream binary not found at $LITESTREAM_BIN"
+  echo "Make sure heroku-postbuild ran successfully"
+  exit 1
+fi
 
 # Check if Litestream is configured
 if [ -z "$LITESTREAM_B2_BUCKET" ]; then
@@ -21,7 +29,7 @@ echo "Bucket: $LITESTREAM_B2_BUCKET"
 echo "Endpoint: $LITESTREAM_B2_ENDPOINT"
 
 # Restore database from Backblaze B2 if it exists
-if litestream restore -if-replica-exists -config litestream.yml "$DB_PATH"; then
+if $LITESTREAM_BIN restore -if-replica-exists -config litestream.yml "$DB_PATH"; then
   echo "✓ Database restored from Backblaze B2"
 else
   echo "No existing backup found. Starting with fresh database."
@@ -29,4 +37,4 @@ fi
 
 # Start Litestream replication in background and run the app
 echo "Starting Litestream replication and Next.js server..."
-exec litestream replicate -config litestream.yml -exec "npm run start"
+exec $LITESTREAM_BIN replicate -config litestream.yml -exec "npm run start"

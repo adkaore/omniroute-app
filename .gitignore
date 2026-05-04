@@ -142,3 +142,6 @@ bun.lock
 
 # Private environment variables for .http-client
 http-client.private.env.json
+
+# Litestream binary (downloaded during Heroku build)
+bin/litestream

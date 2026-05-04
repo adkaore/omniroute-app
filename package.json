@@ -65,7 +65,7 @@
     "build": "node scripts/build-next-isolated.mjs",
     "build:cli": "node --import tsx/esm scripts/prepublish.ts",
     "start": "node scripts/run-next.mjs start",
-    "heroku-postbuild": "npm run build",
+    "heroku-postbuild": "bash scripts/install-litestream.sh && npm run build",
     "lint": "eslint .",
     "electron:dev": "concurrently \"npm run dev\" \"wait-on http://localhost:20128 && cd electron && npm run dev\"",
     "electron:build": "npm run build && cd electron && npm run build",

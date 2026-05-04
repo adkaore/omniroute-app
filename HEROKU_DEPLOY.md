@@ -84,17 +84,9 @@ heroku create your-app-name
 heroku git:remote -a your-app-name
 ```
 
-## Шаг 7: Настройка Buildpacks
+## Шаг 7: Настройка переменных окружения
 
-Heroku нужно установить и Litestream, и Node.js:
-
-```bash
-heroku buildpacks:clear
-heroku buildpacks:add https://github.com/benbjohnson/litestream-heroku-buildpack.git
-heroku buildpacks:add heroku/nodejs
-```
-
-## Шаг 8: Настройка переменных окружения
+**Примечание:** Litestream устанавливается автоматически во время `heroku-postbuild`, поэтому дополнительные buildpacks не нужны.
 
 Установите все необходимые переменные:
 
@@ -131,7 +123,7 @@ heroku config:set REQUIRE_API_KEY="false"
 heroku config:set APP_LOG_LEVEL="info"
 ```
 
-## Шаг 9: Деплой на Heroku
+## Шаг 8: Деплой на Heroku
 
 ```bash
 # Убедитесь, что все изменения закоммичены
@@ -145,7 +137,7 @@ git push heroku main
 git push heroku master
 ```
 
-## Шаг 10: Проверка деплоя
+## Шаг 9: Проверка деплоя
 
 ```bash
 # Откройте приложение в браузере
@@ -164,7 +156,7 @@ heroku logs --tail | grep -i litestream
 Starting Litestream replication and Next.js server...
 ```
 
-## Шаг 11: Проверка бэкапов
+## Шаг 10: Проверка бэкапов
 
 Через несколько минут после запуска:
 
