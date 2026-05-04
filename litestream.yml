@@ -8,11 +8,11 @@ dbs:
         force-path-style: true
         access-key-id: ${LITESTREAM_B2_KEY_ID}
         secret-access-key: ${LITESTREAM_B2_APP_KEY}
-        # Sync every 30 seconds (reduced from 10s for stability)
-        sync-interval: 180s
-        # Snapshot every hour
-        snapshot-interval: 1h
+        # Sync every 60 seconds (balance between safety and B2 operations)
+        sync-interval: 60s
+        # Snapshot every 30 minutes (more frequent for faster restore)
+        snapshot-interval: 30m
         # Retain snapshots for 7 days
         retention: 168h
-        # Validate checksums
+        # Validate checksums every 6 hours
         validation-interval: 6h
