@@ -8,13 +8,16 @@ export DATA_DIR="/app/.omniroute"
 mkdir -p "$DATA_DIR"
 
 DB_PATH="$DATA_DIR/storage.sqlite"
-LITESTREAM_BIN="./bin/litestream"
+LITESTREAM_BIN="/app/bin/litestream"
 
 # Check if Litestream binary exists
 if [ ! -f "$LITESTREAM_BIN" ]; then
-  echo "ERROR: Litestream binary not found at $LITESTREAM_BIN"
-  echo "Make sure heroku-postbuild ran successfully"
-  exit 1
+  echo "WARNING: Litestream binary not found at $LITESTREAM_BIN"
+  echo "Checking if heroku-postbuild ran successfully..."
+  ls -la /app/bin/ || echo "bin directory not found"
+  echo ""
+  echo "Running without backups. Database will be lost on dyno restart!"
+  exec npm run start
 fi
 
 # Check if Litestream is configured

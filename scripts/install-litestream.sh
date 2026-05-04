@@ -2,6 +2,9 @@
 set -e
 
 echo "=== Installing Litestream ==="
+echo "Current directory: $(pwd)"
+echo "Build directory contents:"
+ls -la
 
 # Litestream version
 LITESTREAM_VERSION="v0.3.13"
@@ -29,6 +32,7 @@ echo "URL: ${LITESTREAM_URL}"
 
 # Create bin directory if it doesn't exist
 mkdir -p bin
+echo "Created bin directory at: $(pwd)/bin"
 
 # Download and extract
 curl -L "${LITESTREAM_URL}" | tar -xz -C bin
@@ -38,9 +42,14 @@ chmod +x bin/litestream
 
 # Verify installation
 if [ -f "bin/litestream" ]; then
-  echo "✓ Litestream installed successfully"
+  echo "✓ Litestream installed successfully at $(pwd)/bin/litestream"
   ./bin/litestream version
+  echo ""
+  echo "Final bin directory contents:"
+  ls -la bin/
 else
   echo "✗ Litestream installation failed"
+  echo "bin directory contents:"
+  ls -la bin/ || echo "bin directory not found"
   exit 1
 fi
