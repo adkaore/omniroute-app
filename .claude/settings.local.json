@@ -1,0 +1,16 @@
+{
+  "permissions": {
+    "allow": [
+      "Bash(curl -s https://developers.cloudflare.com/r2/pricing/)",
+      "Bash(html2text)",
+      "WebFetch(domain:developers.cloudflare.com)",
+      "WebFetch(domain:community.cloudflare.com)",
+      "WebFetch(domain:blog.cloudflare.com)",
+      "Bash(node *)",
+      "Bash(curl *)",
+      "WebSearch",
+      "Bash(npm run *)",
+      "WebFetch(domain:blog.heroku.com)"
+    ]
+  }
+}

@@ -1,0 +1,18 @@
+dbs:
+  - path: /app/.omniroute/storage.sqlite
+    replicas:
+      - type: s3
+        bucket: ${LITESTREAM_B2_BUCKET}
+        path: omniroute-db
+        endpoint: ${LITESTREAM_B2_ENDPOINT}
+        force-path-style: true
+        access-key-id: ${LITESTREAM_B2_KEY_ID}
+        secret-access-key: ${LITESTREAM_B2_APP_KEY}
+        # Sync every 10 seconds
+        sync-interval: 10s
+        # Snapshot every hour
+        snapshot-interval: 1h
+        # Retain snapshots for 7 days
+        retention: 168h
+        # Validate checksums
+        validation-interval: 6h
