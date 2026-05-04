@@ -31,11 +31,37 @@ echo "Litestream configuration detected."
 echo "Bucket: $LITESTREAM_B2_BUCKET"
 echo "Endpoint: $LITESTREAM_B2_ENDPOINT"
 
-# Restore database from Backblaze B2 if it exists
-if $LITESTREAM_BIN restore -if-replica-exists -config litestream.yml "$DB_PATH"; then
-  echo "✓ Database restored from Backblaze B2"
-else
-  echo "No existing backup found. Starting with fresh database."
+# Try to restore database from Backblaze B2 with multiple attempts
+MAX_RESTORE_ATTEMPTS=5
+RESTORE_ATTEMPT=1
+RESTORE_SUCCESS=false
+
+while [ $RESTORE_ATTEMPT -le $MAX_RESTORE_ATTEMPTS ]; do
+  echo "Restore attempt $RESTORE_ATTEMPT of $MAX_RESTORE_ATTEMPTS..."
+
+  # Remove any partial/corrupted database files
+  rm -f "$DB_PATH" "$DB_PATH-shm" "$DB_PATH-wal" "$DB_PATH.tmp"
+
+  if $LITESTREAM_BIN restore -if-replica-exists -config litestream.yml "$DB_PATH"; then
+    echo "✓ Database restored from Backblaze B2 on attempt $RESTORE_ATTEMPT"
+    RESTORE_SUCCESS=true
+    break
+  else
+    echo "✗ Restore attempt $RESTORE_ATTEMPT failed"
+
+    if [ $RESTORE_ATTEMPT -lt $MAX_RESTORE_ATTEMPTS ]; then
+      WAIT_TIME=$((RESTORE_ATTEMPT * 5))
+      echo "Waiting ${WAIT_TIME}s before retry..."
+      sleep $WAIT_TIME
+    fi
+  fi
+
+  RESTORE_ATTEMPT=$((RESTORE_ATTEMPT + 1))
+done
+
+if [ "$RESTORE_SUCCESS" = false ]; then
+  echo "WARNING: All restore attempts failed. Starting with fresh database."
+  echo "Database will be lost on dyno restart!"
 fi
 
 # Start Litestream replication in background and run the app

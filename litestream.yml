@@ -8,7 +8,7 @@ dbs:
         force-path-style: true
         access-key-id: ${LITESTREAM_B2_KEY_ID}
         secret-access-key: ${LITESTREAM_B2_APP_KEY}
-        # Sync every 10 seconds
+        # Sync every 30 seconds (reduced from 10s for stability)
         sync-interval: 30s
         # Snapshot every hour
         snapshot-interval: 1h
