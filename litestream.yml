@@ -9,7 +9,7 @@ dbs:
         access-key-id: ${LITESTREAM_B2_KEY_ID}
         secret-access-key: ${LITESTREAM_B2_APP_KEY}
         # Sync every 10 seconds
-        sync-interval: 10s
+        sync-interval: 30s
         # Snapshot every hour
         snapshot-interval: 1h
         # Retain snapshots for 7 days
