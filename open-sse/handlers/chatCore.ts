@@ -977,6 +977,17 @@ export async function handleChatCore({
     log?.info?.("STAGE_TRACE", `${traceId} ${label} t=${elapsed}ms${suffix}`);
   };
   let tokensCompressed: number | null = null;
+  const promptCacheKeyByMessages = new WeakMap<object, string>();
+  const getPromptCacheKeyForMessages = async (messages: unknown[]): Promise<string> => {
+    const cached = promptCacheKeyByMessages.get(messages);
+    if (cached !== undefined) return cached;
+    const { generatePromptCacheKey } = await import("@/lib/promptCache");
+    const cacheKey = generatePromptCacheKey(
+      messages as Array<{ role: string; content: string | unknown[] }>
+    );
+    promptCacheKeyByMessages.set(messages, cacheKey);
+    return cacheKey;
+  };
   const persistFailureUsage = (statusCode: number, errorCode?: string | null) => {
     saveRequestUsage({
       provider: provider || "unknown",
@@ -2675,8 +2686,7 @@ export async function handleChatCore({
         Array.isArray(bodyToSend.messages) &&
         !["nvidia", "codex", "xai"].includes(provider)
       ) {
-        const { generatePromptCacheKey } = await import("@/lib/promptCache");
-        const cacheKey = generatePromptCacheKey(bodyToSend.messages);
+        const cacheKey = await getPromptCacheKeyForMessages(bodyToSend.messages);
         if (cacheKey) {
           bodyToSend = { ...bodyToSend, prompt_cache_key: cacheKey };
         }

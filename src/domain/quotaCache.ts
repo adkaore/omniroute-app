@@ -226,6 +226,59 @@ export function getQuotaCache(connectionId: string): QuotaCacheEntry | null {
   return cache.get(connectionId) || null;
 }
 
+export interface ConnectionQuotaSummary {
+  exhausted: boolean;
+  nearestResetAt: string | null;
+  minRemainingPercentage: number | null;
+  hasQuotaData: boolean;
+}
+
+/**
+ * Summarize cached quota state for routing decisions without exposing internals.
+ * Unknown quota data is treated as available. Exhausted entries reuse the same
+ * optimistic reset handling as isAccountQuotaExhausted().
+ */
+export function getConnectionQuotaSummary(connectionId: string): ConnectionQuotaSummary {
+  const entry = cache.get(connectionId);
+  if (!entry) {
+    return {
+      exhausted: false,
+      nearestResetAt: null,
+      minRemainingPercentage: null,
+      hasQuotaData: false,
+    };
+  }
+
+  const now = Date.now();
+  const exhausted = isAccountQuotaExhausted(connectionId);
+  const percentages: number[] = [];
+  let nearestResetAt: string | null = null;
+  let nearestResetMs = Infinity;
+  let hasQuotaData = false;
+
+  for (const quota of Object.values(entry.quotas)) {
+    hasQuotaData = true;
+    percentages.push(clampPercent(quota.remainingPercentage));
+    if (!quota.resetAt) continue;
+    const resetMs = parseDate(quota.resetAt);
+    if (resetMs !== null && resetMs > now && resetMs < nearestResetMs) {
+      nearestResetMs = resetMs;
+      nearestResetAt = quota.resetAt;
+    }
+  }
+
+  return {
+    exhausted,
+    nearestResetAt,
+    minRemainingPercentage: percentages.length > 0 ? Math.min(...percentages) : null,
+    hasQuotaData,
+  };
+}
+
+export function getNearestQuotaResetAt(connectionId: string): string | null {
+  return getConnectionQuotaSummary(connectionId).nearestResetAt;
+}
+
 /**
  * Check if an account's quota is exhausted based on cached data.
  * Returns false if no cache entry exists (unknown = assume available).

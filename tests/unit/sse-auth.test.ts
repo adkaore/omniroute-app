@@ -123,6 +123,58 @@ test("getProviderCredentials returns last error metadata when active accounts ar
   assert.equal(result.lastError, "provider rate limit");
 });
 
+test("inspectProviderConnectionsForQuotaReset ranks known reset before unknown quota", async () => {
+  const known = await seedConnection("openai", { name: "known-reset", priority: 2 });
+  const unknown = await seedConnection("openai", { name: "unknown-reset", priority: 1 });
+  const resetAt = futureIso(30_000);
+  quotaCache.setQuotaCache((known as any).id, "openai", {
+    daily: { remainingPercentage: 0, resetAt },
+  });
+
+  const candidates = await auth.inspectProviderConnectionsForQuotaReset("openai", null, "gpt-4o");
+
+  const knownCandidate = candidates.find((candidate) => candidate.connectionId === (known as any).id);
+  const unknownCandidate = candidates.find((candidate) => candidate.connectionId === (unknown as any).id);
+  assert.equal(knownCandidate?.available, false);
+  assert.equal(knownCandidate?.quotaExhausted, true);
+  assert.equal(knownCandidate?.nearestResetAt, resetAt);
+  assert.equal(unknownCandidate?.available, true);
+  assert.equal(unknownCandidate?.nearestResetAt, null);
+});
+
+test("inspectProviderConnectionsForQuotaReset treats past reset as available", async () => {
+  const connection = await seedConnection("openai", { name: "past-reset" });
+  quotaCache.setQuotaCache((connection as any).id, "openai", {
+    daily: { remainingPercentage: 0, resetAt: new Date(Date.now() - 1_000).toISOString() },
+  });
+
+  const candidates = await auth.inspectProviderConnectionsForQuotaReset("openai", null, "gpt-4o");
+  const candidate = candidates.find((entry) => entry.connectionId === (connection as any).id);
+
+  assert.equal(candidate?.available, true);
+  assert.equal(candidate?.quotaExhausted, false);
+});
+
+test("inspectProviderConnectionsForQuotaReset blocks quota policy threshold", async () => {
+  const connection = await seedConnection("openai", {
+    name: "policy-blocked-inspection",
+    providerSpecificData: {
+      limitPolicy: { enabled: true, thresholdPercent: 75, windows: ["daily"] },
+    },
+  });
+  const resetAt = futureIso();
+  quotaCache.setQuotaCache((connection as any).id, "openai", {
+    daily: { remainingPercentage: 10, resetAt },
+  });
+
+  const candidates = await auth.inspectProviderConnectionsForQuotaReset("openai", null, "gpt-4o");
+  const candidate = candidates.find((entry) => entry.connectionId === (connection as any).id);
+
+  assert.equal(candidate?.available, false);
+  assert.equal(candidate?.quotaBlocked, true);
+  assert.equal(candidate?.nearestResetAt, resetAt);
+});
+
 test("getProviderCredentials enforces generic quota policy unless explicitly bypassed", async () => {
   const connection = await seedConnection("openai", {
     name: "quota-policy",

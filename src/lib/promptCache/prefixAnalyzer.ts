@@ -59,7 +59,9 @@ export function analyzePrefix(messages: Message[]): PrefixAnalysis {
   }
 
   const prefixMessages = messages.slice(0, prefixEndIdx + 1);
-  const prefixText = prefixMessages.map((m) => normalizeContent(m.content)).join("\n");
+  const prefixText = prefixMessages
+    .map((m) => `${m.role || "user"}\u0000${normalizeContent(m.content)}`)
+    .join("\n");
   const prefixHash = crypto.createHash("sha256").update(prefixText).digest("hex");
   const prefixTokens = estimateTokens(prefixText);
 

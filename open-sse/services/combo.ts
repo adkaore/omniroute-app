@@ -1,7 +1,7 @@
 /**
  * Shared combo (model combo) handling with fallback support
  * Supports: priority, weighted, round-robin, random, least-used, cost-optimized,
- * strict-random, auto, fill-first, p2c, lkgp, context-optimized, and context-relay strategies
+ * strict-random, auto, fill-first, p2c, quota-reset, lkgp, context-optimized, and context-relay strategies
  */
 
 import {
@@ -695,6 +695,104 @@ function orderTargetsByPowerOfTwoChoices(targets: ResolvedComboTarget[], comboNa
       ? secondIndex
       : firstIndex;
   return [targets[selectedIndex], ...targets.filter((_, index) => index !== selectedIndex)];
+}
+
+async function sortTargetsByQuotaReset(
+  targets: ResolvedComboTarget[],
+  body: Record<string, unknown> | null | undefined,
+  log: { info?: (...args: unknown[]) => void; warn?: (...args: unknown[]) => void }
+): Promise<ResolvedComboTarget[]> {
+  if (targets.length <= 1) return targets;
+
+  try {
+    const { inspectProviderConnectionsForQuotaReset } = await import(
+      "../../src/sse/services/auth.ts"
+    );
+    const inspectionMemo = new Map<
+      string,
+      ReturnType<typeof inspectProviderConnectionsForQuotaReset>
+    >();
+    const scored = await Promise.all(
+      targets.map(async (target, index) => {
+        const requestedModel = parseModel(target.modelStr).model || target.modelStr;
+        const providerKey = target.providerId || target.provider;
+        const allowedConnectionIds = target.allowedConnectionIds || null;
+        const allowedKey = allowedConnectionIds ? [...allowedConnectionIds].sort().join(",") : "*";
+        const forcedConnectionId = target.connectionId || null;
+        const memoKey = [providerKey, allowedKey, requestedModel, forcedConnectionId || ""].join(
+          "|"
+        );
+        let candidatesPromise = inspectionMemo.get(memoKey);
+        if (!candidatesPromise) {
+          candidatesPromise = inspectProviderConnectionsForQuotaReset(
+            providerKey,
+            allowedConnectionIds,
+            requestedModel,
+            { forcedConnectionId }
+          );
+          inspectionMemo.set(memoKey, candidatesPromise);
+        }
+        const candidates = await candidatesPromise;
+        const available = candidates.filter((candidate) => candidate.available);
+        const best = [...available].sort((a, b) => {
+          const aMs = a.nearestResetAt ? new Date(a.nearestResetAt).getTime() : Infinity;
+          const bMs = b.nearestResetAt ? new Date(b.nearestResetAt).getTime() : Infinity;
+          if (aMs !== bMs) return aMs - bMs;
+          if ((a.quotaHeadroomPercent ?? -1) !== (b.quotaHeadroomPercent ?? -1)) {
+            return (b.quotaHeadroomPercent ?? -1) - (a.quotaHeadroomPercent ?? -1);
+          }
+          const aPriority = a.priority || 999;
+          const bPriority = b.priority || 999;
+          if (aPriority !== bPriority) return aPriority - bPriority;
+          return a.connectionId.localeCompare(b.connectionId);
+        })[0];
+        const skipped = candidates.length > 0 && available.length === 0;
+        return {
+          target,
+          index,
+          skipped,
+          hasKnownReset: Boolean(best?.nearestResetAt),
+          resetAt: best?.nearestResetAt || null,
+        };
+      })
+    );
+
+    const eligible = scored.filter((entry) => !entry.skipped);
+    if (eligible.length === 0) {
+      log.info?.(
+        "COMBO",
+        `Quota-reset ordering: all ${targets.length} targets quota-blocked; keeping preflight fallback path`
+      );
+      return targets;
+    }
+
+    eligible.sort((a, b) => {
+      if (a.hasKnownReset !== b.hasKnownReset) return a.hasKnownReset ? -1 : 1;
+      if (a.hasKnownReset && b.hasKnownReset) {
+        const aMs = new Date(a.resetAt as string).getTime();
+        const bMs = new Date(b.resetAt as string).getTime();
+        if (aMs !== bMs) return aMs - bMs;
+      }
+      return a.index - b.index;
+    });
+
+    log.info?.(
+      "COMBO",
+      `Quota-reset ordering: eligible=${eligible.length}, skipped=${scored.length - eligible.length}, ` +
+        `first=${eligible[0]?.target.modelStr || "none"}${
+          eligible[0]?.resetAt ? ` resetAt=${eligible[0].resetAt}` : ""
+        }`
+    );
+    return eligible.map((entry) => entry.target);
+  } catch (error) {
+    log.warn?.(
+      "COMBO",
+      `Quota-reset ordering failed; preserving order: ${
+        error instanceof Error ? error.message : String(error)
+      }`
+    );
+    return targets;
+  }
 }
 
 function toTextContent(content) {
@@ -1476,6 +1574,8 @@ export async function handleComboChat({
   } else if (strategy === "p2c") {
     orderedTargets = orderTargetsByPowerOfTwoChoices(orderedTargets, combo.name);
     log.info("COMBO", `Power-of-two-choices ordering: selected ${orderedTargets[0]?.modelStr}`);
+  } else if (strategy === "quota-reset") {
+    orderedTargets = await sortTargetsByQuotaReset(orderedTargets, body, log);
   } else if (strategy === "least-used") {
     orderedTargets = sortTargetsByUsage(orderedTargets, combo.name);
     log.info("COMBO", `Least-used ordering: ${orderedTargets[0]?.modelStr} has fewest requests`);

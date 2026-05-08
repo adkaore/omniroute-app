@@ -67,7 +67,11 @@ export interface CacheControlMetrics {
 /**
  * Routing strategies that are deterministic (same request → same provider)
  */
-const DETERMINISTIC_STRATEGIES: Set<RoutingStrategyValue> = new Set(["priority", "cost-optimized"]);
+const DETERMINISTIC_STRATEGIES: Set<RoutingStrategyValue> = new Set([
+  "priority",
+  "cost-optimized",
+  "quota-reset",
+]);
 
 /**
  * Providers that support prompt caching

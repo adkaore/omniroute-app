@@ -21,7 +21,7 @@ import { runWithProxyContext } from "@omniroute/open-sse/utils/proxyFetch.ts";
 
 type JsonRecord = Record<string, unknown>;
 
-type SyncSource = "manual" | "scheduled";
+export type SyncSource = "manual" | "scheduled" | "error";
 
 interface ProviderConnectionLike {
   id: string;

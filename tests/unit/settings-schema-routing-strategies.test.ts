@@ -1,8 +1,14 @@
 import test from "node:test";
 import assert from "node:assert/strict";
-import { SETTINGS_FALLBACK_STRATEGY_VALUES } from "@/shared/constants/routingStrategies";
+import {
+  ROUTING_STRATEGY_VALUES,
+  SETTINGS_FALLBACK_STRATEGY_VALUES,
+} from "@/shared/constants/routingStrategies";
 import { updateSettingsSchema as settingsRouteSchema } from "@/shared/validation/settingsSchemas";
-import { updateSettingsSchema as sharedSettingsSchema } from "@/shared/validation/schemas";
+import {
+  createComboSchema,
+  updateSettingsSchema as sharedSettingsSchema,
+} from "@/shared/validation/schemas";
 
 for (const strategy of SETTINGS_FALLBACK_STRATEGY_VALUES) {
   test(`settings route schema accepts fallbackStrategy=${strategy}`, () => {
@@ -15,6 +21,16 @@ for (const strategy of SETTINGS_FALLBACK_STRATEGY_VALUES) {
     assert.equal(parsed.fallbackStrategy, strategy);
   });
 }
+
+test("shared combo strategy schema accepts quota-reset", () => {
+  assert.equal((ROUTING_STRATEGY_VALUES as readonly string[]).includes("quota-reset"), true);
+  const parsed = createComboSchema.parse({
+    name: "quota-reset-combo",
+    strategy: "quota-reset",
+    models: ["openai/gpt-4o"],
+  });
+  assert.equal(parsed.strategy, "quota-reset");
+});
 
 test("settings schemas reject combo-only strategies as account fallback strategies", () => {
   for (const strategy of ["auto", "lkgp", "context-optimized"]) {

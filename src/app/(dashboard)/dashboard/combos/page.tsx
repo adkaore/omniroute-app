@@ -64,11 +64,14 @@ const STRATEGY_OPTIONS = ROUTING_STRATEGIES.map((strategy) => ({
 
 const STRATEGY_LABEL_FALLBACK = {
   "context-relay": "Context Relay",
+  "quota-reset": "Quota Reset",
 };
 
 const STRATEGY_DESC_FALLBACK = {
   "context-relay":
     "Priority-style routing with automatic context handoffs when account rotation happens.",
+  "quota-reset":
+    "Routes first to an account with available quota and the nearest upcoming reset window.",
 };
 
 const STRATEGY_GUIDANCE_FALLBACK = {
@@ -117,6 +120,11 @@ const STRATEGY_GUIDANCE_FALLBACK = {
     when: "Use when you want low-latency selection using Power-of-Two-Choices algorithm.",
     avoid: "Avoid for small combos with 2 or fewer models — no benefit over round-robin.",
     example: "Example: High-throughput inference across 4+ equivalent model endpoints.",
+  },
+  "quota-reset": {
+    when: "Use when multiple accounts have quota windows and you want the soonest-resetting available account first.",
+    avoid: "Avoid when providers do not expose quota reset data.",
+    example: "Example: Rotate Codex or subscription accounts by nearest future reset without selecting exhausted accounts.",
   },
   "strict-random": {
     when: "Use when you want perfectly even spread — each model used once before repeating.",
@@ -247,6 +255,15 @@ const STRATEGY_RECOMMENDATIONS_FALLBACK = {
       "Use with 4+ models for best effect.",
       "Requires latency telemetry enabled in Settings.",
       "Great replacement for round-robin in high-throughput combos.",
+    ],
+  },
+  "quota-reset": {
+    title: "Nearest quota reset",
+    description: "Ranks available accounts by the closest future quota reset and skips exhausted accounts.",
+    tips: [
+      "Works best with providers that expose resetAt quota windows.",
+      "Keep quota refresh enabled so cached windows stay accurate.",
+      "Use as a deterministic alternative when P2C headroom scoring is too broad.",
     ],
   },
   "strict-random": {

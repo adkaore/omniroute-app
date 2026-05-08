@@ -5,6 +5,7 @@ export const ROUTING_STRATEGY_VALUES = [
   "context-relay",
   "fill-first",
   "p2c",
+  "quota-reset",
   "random",
   "least-used",
   "cost-optimized",
@@ -101,6 +102,13 @@ export const ROUTING_STRATEGIES: RoutingStrategyOption[] = [
     combosDescKey: "p2cDesc",
     settingsDescKey: "p2cDesc",
     icon: "balance",
+  },
+  {
+    value: "quota-reset",
+    labelKey: "quotaReset",
+    combosDescKey: "quotaResetDesc",
+    settingsDescKey: "quotaResetDesc",
+    icon: "hourglass_top",
   },
   {
     value: "random",

@@ -8,6 +8,7 @@ import {
 } from "@/lib/localDb";
 import {
   DEFAULT_QUOTA_THRESHOLD_PERCENT,
+  getConnectionQuotaSummary,
   getQuotaCache,
   getQuotaWindowStatus,
   isAccountQuotaExhausted,
@@ -35,6 +36,7 @@ import {
 import { getCodexModelScope } from "@omniroute/open-sse/executors/codex.ts";
 import { getProviderAlias, resolveProviderId } from "@/shared/constants/providers";
 import { isModelExcludedByConnection } from "@/domain/connectionModelRules";
+import { scheduleQuotaRefreshAfterProviderError } from "@/domain/quotaRefreshOnError";
 import * as log from "../utils/logger";
 import { fisherYatesShuffle, getNextFromDeckSync } from "@/shared/utils/shuffleDeck";
 
@@ -42,6 +44,7 @@ type JsonRecord = Record<string, unknown>;
 
 interface ProviderConnectionView {
   id: string;
+  provider: string | null;
   isActive: boolean;
   rateLimitedUntil: string | null;
   testStatus: string | null;
@@ -87,6 +90,24 @@ interface CooldownInspectionState {
   retryableModelCooldownMs: number | null;
 }
 
+export interface QuotaResetConnectionCandidate {
+  connectionId: string;
+  provider: string;
+  available: boolean;
+  quotaExhausted: boolean;
+  quotaBlocked: boolean;
+  nearestResetAt: string | null;
+  quotaHeadroomPercent: number | null;
+  priority: number;
+  lastUsedAt: string | null;
+  backoffLevel: number;
+}
+
+interface QuotaResetInspectionOptions {
+  forcedConnectionId?: string | null;
+  allowSuppressedConnections?: boolean;
+}
+
 const MIN_QUOTA_THRESHOLD_PERCENT = 1;
 const MAX_QUOTA_THRESHOLD_PERCENT = 100;
 const NON_RETRYABLE_MODEL_LOCKOUT_REASONS = new Set(["not_found", "not_found_local"]);
@@ -118,6 +139,7 @@ function toProviderConnection(value: unknown): ProviderConnectionView {
   const row = asRecord(value);
   return {
     id: toStringOrNull(row.id) || "",
+    provider: toStringOrNull(row.provider),
     isActive: row.isActive === true,
     rateLimitedUntil: toStringOrNull(row.rateLimitedUntil),
     testStatus: toStringOrNull(row.testStatus),
@@ -556,6 +578,78 @@ function buildQuotaPreflightRateLimitedResult(
     lastError: `All ${provider} accounts blocked by quota preflight`,
     lastErrorCode: 429,
   };
+}
+
+async function loadProviderConnectionViews(
+  provider: string | null,
+  activeOnly: boolean
+): Promise<ProviderConnectionView[]> {
+  const providersToSearch = provider ? getProviderSearchPool(provider) : [null];
+  const connectionResults = await Promise.all(
+    providersToSearch.map((p) =>
+      activeOnly
+        ? getProviderConnections({ provider: p, isActive: true })
+        : getProviderConnections({ provider: p })
+    )
+  );
+  return connectionResults
+    .filter(Array.isArray)
+    .flat()
+    .map(toProviderConnection)
+    .filter((conn) => conn.id.length > 0);
+}
+
+export async function inspectProviderConnectionsForQuotaReset(
+  provider: string,
+  allowedConnections: string[] | null = null,
+  requestedModel: string | null = null,
+  options: QuotaResetInspectionOptions = {}
+): Promise<QuotaResetConnectionCandidate[]> {
+  const allowSuppressedConnections = options.allowSuppressedConnections === true;
+  const forcedConnectionId =
+    typeof options.forcedConnectionId === "string" && options.forcedConnectionId.trim().length > 0
+      ? options.forcedConnectionId.trim()
+      : null;
+
+  let connections = await loadProviderConnectionViews(provider, true);
+  if (allowedConnections && allowedConnections.length > 0) {
+    connections = connections.filter((conn) => allowedConnections.includes(conn.id));
+  }
+  if (forcedConnectionId) {
+    connections = connections.filter((conn) => conn.id === forcedConnectionId);
+  }
+
+  return connections.map((connection) => {
+    const effectiveProvider = connection.provider || provider;
+    const quotaSummary = getConnectionQuotaSummary(connection.id);
+
+    const policyEvaluation = evaluateQuotaLimitPolicy(effectiveProvider, connection);
+    const quotaHeadroomPercent = getConnectionQuotaHeadroomPercent(effectiveProvider, connection);
+    const modelExcluded = Boolean(
+      requestedModel && isModelExcludedByConnection(requestedModel, connection.providerSpecificData)
+    );
+    const suppressed =
+      !allowSuppressedConnections &&
+      (isAccountUnavailable(connection.rateLimitedUntil) ||
+        isTerminalConnectionStatus(connection) ||
+        (effectiveProvider === "codex" && isCodexScopeUnavailable(connection, requestedModel)) ||
+        Boolean(requestedModel && isModelLocked(effectiveProvider, connection.id, requestedModel)));
+    const available =
+      !modelExcluded && !suppressed && !quotaSummary.exhausted && !policyEvaluation.blocked;
+
+    return {
+      connectionId: connection.id,
+      provider: effectiveProvider,
+      available,
+      quotaExhausted: quotaSummary.exhausted,
+      quotaBlocked: policyEvaluation.blocked,
+      nearestResetAt: policyEvaluation.resetAt || quotaSummary.nearestResetAt,
+      quotaHeadroomPercent,
+      priority: connection.priority,
+      lastUsedAt: connection.lastUsedAt,
+      backoffLevel: connection.backoffLevel,
+    };
+  });
 }
 
 // Mutex to prevent race conditions during account selection
@@ -1284,6 +1378,13 @@ export async function markAccountUnavailable(
     const { shouldFallback, cooldownMs: rawCooldownMs, newBackoffLevel, reason } = result;
     if (!shouldFallback) return { shouldFallback: false, cooldownMs: 0 };
     const providerErrorType = classifyProviderError(status, errorText, provider);
+    scheduleQuotaRefreshAfterProviderError({
+      connectionId,
+      provider,
+      status,
+      errorText,
+      reason: reason || providerErrorType,
+    });
 
     if (provider && resolveProviderId(provider) === "grok-web" && status === 403 && model) {
       const lockout = recordModelLockoutFailure(

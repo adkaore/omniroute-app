@@ -1,3 +1,5 @@
+import type { RoutingStrategyValue } from "@/shared/constants/routingStrategies";
+
 /**
  * Combo — a routing group that distributes requests across provider nodes.
  */
@@ -16,7 +18,7 @@ export interface Combo {
   updatedAt: string;
 }
 
-export type ComboStrategy = "priority" | "weighted" | "round-robin" | "context-relay";
+export type ComboStrategy = RoutingStrategyValue;
 
 export interface ComboNode {
   connectionId: string;

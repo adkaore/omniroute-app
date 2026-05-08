@@ -58,6 +58,7 @@ describe("Cache Control Policy", () => {
     test("identifies deterministic strategies", () => {
       assert.equal(isDeterministicStrategy("priority"), true);
       assert.equal(isDeterministicStrategy("cost-optimized"), true);
+      assert.equal(isDeterministicStrategy("quota-reset"), true);
     });
 
     test("identifies non-deterministic strategies", () => {
@@ -109,6 +110,30 @@ describe("Cache Control Policy", () => {
           targetProvider: "anthropic",
         }),
         true
+      );
+    });
+
+    test("preserves for combo with quota-reset strategy + Claude client + caching provider", () => {
+      assert.equal(
+        shouldPreserveCacheControl({
+          userAgent: "claude-code/0.1.0",
+          isCombo: true,
+          comboStrategy: "quota-reset",
+          targetProvider: "claude",
+        }),
+        true
+      );
+    });
+
+    test("rejects quota-reset cache-control preservation for non-caching provider", () => {
+      assert.equal(
+        shouldPreserveCacheControl({
+          userAgent: "claude-code/0.1.0",
+          isCombo: true,
+          comboStrategy: "quota-reset",
+          targetProvider: "openai",
+        }),
+        false
       );
     });
 
