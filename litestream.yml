@@ -13,6 +13,6 @@ dbs:
         # Snapshot every 30 minutes (more frequent for faster restore)
         snapshot-interval: 30m
         # Retain snapshots for 7 days
-        retention: 168h
+        retention: 72h
         # Validate checksums every 6 hours
         validation-interval: 6h
